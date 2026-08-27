@@ -1,0 +1,17 @@
+{
+  "name": "unlink-api",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "fmt": "oxfmt",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  },
+  "dependencies": {
+    "hono": "^4.13.5"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.65.0",
+    "wrangler": "^4.110.0"
+  }
+}
