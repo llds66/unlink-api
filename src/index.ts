@@ -122,7 +122,7 @@ app.post("/xhs", async (c) => {
         return c.json({
           success: true,
           data: {
-            appuid
+            user_id: appuid
           }
         })
       }
@@ -135,7 +135,7 @@ app.post("/xhs", async (c) => {
         return c.json({
           success: true,
           data: {
-            appuid: decodedAppuid
+            user_id: decodedAppuid
           }
         })
       }
@@ -174,9 +174,9 @@ app.post("/xhs", async (c) => {
 
     return c.json({
       success: true,
-      message: "未获取到 appuid",
+      message: "未获取到 user_id",
       data: {
-        appuid: null
+        user_id: null
       }
     })
   } catch (error) {
