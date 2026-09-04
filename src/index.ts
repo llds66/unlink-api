@@ -7,6 +7,49 @@ type Bindings = CloudflareBindings & {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+const SHARE_RED_ID_KEY = "262035496752980663974569"
+
+/**
+ * 从第二种分享链接的 shareRedId 参数还原用户 ID。
+ * shareRedId 使用 Base64URL 编码，解码后再按固定密钥逐字符模 32 相减。
+ */
+function decodeShareRedId(shareRedId: string): string | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(shareRedId)) {
+    return null
+  }
+
+  try {
+    const padded = shareRedId
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(shareRedId.length / 4) * 4, "=")
+    const encrypted = atob(padded)
+
+    if (encrypted.length !== SHARE_RED_ID_KEY.length) {
+      return null
+    }
+
+    const appuid = Array.from(encrypted, (character, index) => {
+      const residue = (character.charCodeAt(0) - Number(SHARE_RED_ID_KEY[index]) + 32) % 32
+
+      // appuid 为十六进制字符串；模 32 的余数需映射回对应的可打印字符。
+      if (residue >= 16 && residue <= 25) {
+        return String.fromCharCode(residue + 32)
+      }
+
+      if (residue >= 1 && residue <= 6) {
+        return String.fromCharCode(residue + 96)
+      }
+
+      return null
+    })
+
+    return appuid.every((character) => character !== null) ? appuid.join("") : null
+  } catch {
+    return null
+  }
+}
+
 /** 跨域配置 */
 app.use("*", (c, next) => {
   const allowedOrigins = (c.env.CORS_ALLOW_ORIGIN ?? "")
@@ -26,8 +69,8 @@ app.get("/", (c) => {
 })
 
 /**
- * @routes 解析小红书短链 /xhs
- * @description 输入短链，跟随重定向并从 URL 中读取 appuid
+ * @routes 解析小红书分享链接 /xhs
+ * @description 支持短链重定向中的 appuid，以及长链接 shareRedId
  */
 app.post("/xhs", async (c) => {
   const { url } = await c.req.json()
@@ -72,7 +115,7 @@ app.post("/xhs", async (c) => {
   try {
     // 最多跟随 5 次重定向
     for (let i = 0; i < 5; i++) {
-      // 每一跳都先检查 URL 中有没有 appuid
+      // 每一跳都先检查第一种分享格式的 appuid
       const appuid = currentUrl.searchParams.get("appuid")
 
       if (appuid) {
@@ -80,6 +123,19 @@ app.post("/xhs", async (c) => {
           success: true,
           data: {
             appuid
+          }
+        })
+      }
+
+      // 第二种分享格式将用户 ID 加密后放在 shareRedId 中，无需请求页面。
+      const shareRedId = currentUrl.searchParams.get("shareRedId")
+      const decodedAppuid = shareRedId ? decodeShareRedId(shareRedId) : null
+
+      if (decodedAppuid) {
+        return c.json({
+          success: true,
+          data: {
+            appuid: decodedAppuid
           }
         })
       }
