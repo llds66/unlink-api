@@ -1,28 +1,70 @@
+## 接口
 
-## 用户主页格式
-https://www.xiaohongshu.com/user/profile/${user_id}
+### `POST /xhs`
 
-## 第一种分享链接
-格式：https://xhslink.cn/o/7UwDYagWnyl
+解析小红书分享链接中的用户 ID，支持短链接重定向后的 `appuid` 参数，以及长链接中的 `shareRedId` 参数。
 
-解析：重定向链接参数 appuid
-appuid就是user_id
+请求头：
 
-## 第二种分享链接
-格式：https://www.xiaohongshu.com/explore/6a90261f000000002102502c?app_platform=android&ignoreEngage=true&app_version=9.44.1&share_from_user_hidden=true&xsec_source=app_share&type=normal&xsec_token=CBnrxCjHNWSsWOcy0c7VxHmIa-sBtC_7Jzkr4agsCm860=&author_share=1&xhsshare=WeixinSession&shareRedId=ODgyM0dGNkw2NzUyOTgwNjczOTc5Nz8_&apptime=1788500366&share_id=339fe35b0a5a4127b552f5f33c202aee&share_channel=wechat&code=8nb4f7yRzNr
+| 名称 | 值 |
+| --- | --- |
+| `Content-Type` | `application/json` |
 
-解析：
-获取 shareRedId
-第一步：Base64URL 解码得到 24 字节
-第二步：固定 KEY：262035496752980663974569 ，逐字符执行 r = (ord(密文字符) - KEY[i]) % 32
+请求体：
 
-示例
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `url` | `string` | 是 | HTTPS 小红书链接；仅支持 `xhslink.cn`、`xiaohongshu.com` 和 `www.xiaohongshu.com`。 |
+
+
+解析成功：
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "0123456789abcdef"
+  }
+}
 ```
-ODgyM0dGNkw2NzUyOTgwNjczOTc5Nz8_
-        ↓ Base64URL
-8823GF6L67529806739797??
-        ↓ 固定 KEY 解密
-6203da2c0000000010005296
 
+未能从合法链接中取得用户 ID 时，接口仍返回 `200`：
+
+```json
+{
+  "success": true,
+  "message": "未获取到 user_id",
+  "data": {
+    "user_id": null
+  }
+}
 ```
 
+参数错误或不支持的链接返回 `400`：
+
+```json
+{
+  "success": false,
+  "message": "url 不能为空"
+}
+```
+
+## 检测原理
+
+### 普通分享短链接
+
+短链接通常会经由 302/301 重定向，获取 URL 的查询参数的`appuid`(用户ID)
+
+### 微信分享链接
+
+获取链接中的 `shareRedId`参数
++ Base64URL 转回普通 Base64 并补齐 =
++ atob 解码得到加密字符；
++ 用固定密钥 262035496752980663974569 对每个字符做模 32 相减；
++ 把余数映射回十六进制字符，得到原始 用户ID。
+
+## 致谢
+
+- 解密方法参考 [LuckyXing](https://linux.do/t/topic/2809994)
+
+- [**LINUX DO 社区**](https://linux.do) (真诚 、友善 、团结 、专业)
