@@ -73,7 +73,7 @@ app.get("/", (c) => {
  * @description 支持短链重定向中的 appuid，以及长链接 shareRedId
  */
 app.post("/xhs", async (c) => {
-  const { url } = await c.req.json()
+  const { url, turnstileToken } = await c.req.json()
 
   if (!url) {
     return c.json(
@@ -111,6 +111,73 @@ app.post("/xhs", async (c) => {
       400
     )
   }
+
+
+  // 验证 Turnstile
+  if (!turnstileToken) {
+    return c.json(
+      {
+        success: false,
+        message: "请完成人机验证"
+      },
+      400
+    )
+  }
+  const formData = new FormData()
+  formData.append(
+    "secret",
+    c.env.TURNSTILE_SECRET_KEY
+  )
+
+  formData.append(
+    "response",
+    turnstileToken
+  )
+
+  const ip = c.req.header("CF-Connecting-IP")
+
+  if (ip) {
+    formData.append("remoteip", ip)
+  }
+
+  const verifyResponse = await fetch(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    {
+      method: "POST",
+      body: formData
+    }
+  )
+  if (!verifyResponse.ok) {
+    console.error(
+      "Turnstile Siteverify 请求失败:",
+      verifyResponse.status
+    )
+
+    return c.json(
+      {
+        success: false,
+        message: "人机验证服务异常"
+      },
+      502
+    )
+  }
+
+  const verifyResult = await verifyResponse.json<{
+    success: boolean
+    "error-codes"?: string[]
+  }>()
+
+  if (!verifyResult.success) {
+    return c.json(
+      {
+        success: false,
+        message: "人机验证失败"
+      },
+      400
+    )
+  }
+
+
 
   try {
     // 最多跟随 5 次重定向
